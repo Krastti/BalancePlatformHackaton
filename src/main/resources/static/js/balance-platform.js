@@ -52,6 +52,8 @@
         facts: '#bp-facts-code', check: '#bp-check-code'};
     const scriptSelections = {normalizer: '#bp-configuration-normalizer', procedure: '#bp-configuration-procedure',
         facts: '#bp-configuration-facts'};
+    const bundledScripts = {normalizer: 'normalize_dataset.py', procedure: 'compare_dataset.py',
+        facts: 'prepare_changed_facts.py'};
     const scriptBaselines = new Map();
     let scriptRequest = 0;
     let stageSourceRequest = 0;
@@ -276,6 +278,11 @@
             : 'Проверки выключены. Сравнение и сводная будут доступны.';
     }
 
+    function procedureFiles(stage) {
+        return configurationProcedures.filter(file => file === bundledScripts[stage]
+            || !Object.values(bundledScripts).includes(file));
+    }
+
     function renderConfiguration() {
         q('.bp-configuration').disabled = !configurationReady || configurationBusy;
         const config = savedConfigurations.find(item => item.id === q('#bp-configuration').value);
@@ -291,35 +298,41 @@
         q('#bp-normalization-editor').open = Boolean(config?.normalization?.length);
         if (config) q('#bp-dataset').value = config.datasetId;
         const procedures = q('#bp-configuration-procedure');
+        const comparisonFiles = procedureFiles('procedure');
         procedures.replaceChildren(new Option('Штатная процедура', ''),
-            ...configurationProcedures.map(name => new Option(name, name)));
-        if (config?.procedure && !configurationProcedures.includes(config.procedure)) {
+            ...comparisonFiles.map(name => new Option(name, name)));
+        if (config?.procedure && !comparisonFiles.includes(config.procedure)) {
             procedures.add(new Option(config.procedure + ' · недоступен', config.procedure));
         }
         procedures.value = config?.procedure || '';
-        procedures.closest('label').hidden = configurationProcedures.length === 0;
+        procedures.closest('label').hidden = comparisonFiles.length === 0;
         const normalizers = q('#bp-configuration-normalizer');
+        const normalizationFiles = procedureFiles('normalizer');
         normalizers.replaceChildren(new Option('В составе процедуры сравнения', ''),
-            ...configurationProcedures.map(name => new Option(name, name)));
-        if (config?.normalizer && !configurationProcedures.includes(config.normalizer)) {
+            ...normalizationFiles.map(name => new Option(name, name)));
+        if (config?.normalizer && !normalizationFiles.includes(config.normalizer)) {
             normalizers.add(new Option(config.normalizer + ' · недоступен', config.normalizer));
         }
         normalizers.value = config?.normalizer || '';
-        normalizers.closest('label').hidden = configurationProcedures.length === 0;
+        normalizers.closest('label').hidden = normalizationFiles.length === 0;
         const facts = q('#bp-configuration-facts');
+        const factsFiles = procedureFiles('facts');
         facts.replaceChildren(new Option('Все строки сравнения', ''),
-            ...configurationProcedures.map(name => new Option(name, name)));
-        if (config?.factsProcedure && !configurationProcedures.includes(config.factsProcedure)) {
+            ...factsFiles.map(name => new Option(name, name)));
+        if (config?.factsProcedure && !factsFiles.includes(config.factsProcedure)) {
             facts.add(new Option(config.factsProcedure + ' · недоступен', config.factsProcedure));
         }
         facts.value = config?.factsProcedure || '';
-        facts.closest('label').hidden = configurationProcedures.length === 0;
+        facts.closest('label').hidden = factsFiles.length === 0;
         q('#bp-facts-code').value = config?.factsCode || '';
         q('#bp-normalizer-code').value = config?.normalizerCode || '';
         q('#bp-procedure-code').value = config?.procedureCode || '';
         q('#bp-check-code').value = config?.checkCode || '';
         q('#bp-configuration-parameters').value = config?.parameters ? JSON.stringify(config.parameters, null, 2) : '';
         q('#bp-configuration-checks').replaceChildren();
+        if (configurationReady && !configurationChecks.length) {
+            q('#bp-configuration-checks').append(node('p', 'Шаблоны проверок не найдены. Проверьте BALANCE_CHECKS_PATH на сервере.', 'bp-muted'));
+        }
         for (const check of defaultCheckPlan(config)) appendCheckRow(check);
         q('#bp-save-configuration').disabled = !configurationReady || configurationBusy;
         q('#bp-copy-configuration').disabled = !configurationReady || configurationBusy || !config;
@@ -332,8 +345,9 @@
     function renderScriptCatalog() {
         scriptRequest += 1;
         const stage = q('#bp-script-target').value;
-        const files = stage === 'check' ? configurationChecks : configurationProcedures;
+        const files = stage === 'check' ? configurationChecks : procedureFiles(stage);
         q('#bp-script-file').replaceChildren(...files.map(file => new Option(file, file)));
+        if (!files.length) q('#bp-script-file').add(new Option('Нет доступных файлов', ''));
         q('#bp-script-copy').disabled = !files.length;
         q('#bp-script-status').textContent = '';
         renderScriptDiff();

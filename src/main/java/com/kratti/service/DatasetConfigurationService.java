@@ -40,6 +40,7 @@ public class DatasetConfigurationService {
     private final DatasetConfigurationRepository repository;
     private final Path directory;
     private final Path procedures;
+    private final boolean bundledProcedures;
     private final DatasetPythonSandbox sandbox;
     private final ObjectMapper json;
     private final String python;
@@ -57,7 +58,8 @@ public class DatasetConfigurationService {
         this.python = python;
         this.analysisConfigurations = analysisConfigurations;
         this.directory = checksPath.isBlank() ? null : Path.of(checksPath).toAbsolutePath().normalize();
-        this.procedures = proceduresPath.isBlank() ? null : Path.of(proceduresPath).toAbsolutePath().normalize();
+        this.bundledProcedures = proceduresPath.isBlank();
+        this.procedures = Path.of(bundledProcedures ? "python-src" : proceduresPath).toAbsolutePath().normalize();
     }
 
     /** Возвращает доступные имена файлов без публикации серверных путей. */
@@ -65,9 +67,11 @@ public class DatasetConfigurationService {
         return catalog(directory, "check_.*\\.py");
     }
 
-    /** Возвращает имена доступных доверенных процедур сравнения. */
+    /** Возвращает штатные процедуры или файлы из доверенного каталога оператора. */
     public List<String> availableProcedures() {
-        return catalog(procedures, "[A-Za-z0-9][A-Za-z0-9_.-]*\\.py");
+        return catalog(procedures, bundledProcedures
+                ? "(compare_dataset|normalize_dataset|prepare_changed_facts)\\.py"
+                : "[A-Za-z0-9][A-Za-z0-9_.-]*\\.py");
     }
 
     /** Читает только файл из доверенного каталога и возвращает редактируемую копию. */

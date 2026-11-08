@@ -10,3 +10,7 @@
 !python-src/csv_mart.py
 !python-src/sandbox_entry.py
 !python-src/normalize_dataset.py
+!python-src/configured_checks.py
+!python-src/inspect_script.py
+!python-src/prepare_changed_facts.py
+!python-src/preview_normalization.py
