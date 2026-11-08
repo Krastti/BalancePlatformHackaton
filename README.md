@@ -6,7 +6,7 @@
 [![PostgreSQL 17](https://img.shields.io/badge/PostgreSQL-17-4169E1)](docker-compose.yaml)
 [![OpenAPI 3.0.3](https://img.shields.io/badge/OpenAPI-3.0.3-6BA539)](openapi.yaml)
 
-**Команда** — _название уточняется_.
+**Команда** — _Узники террафирмы_.
 
 **Задача** — «Система анализа изменений» системы принятия решений (СПР).
 
