@@ -1,0 +1,12 @@
+**
+!pom.xml
+!src/
+!src/**
+!python-src/
+!python-src/compare_dataset.py
+!python-src/compare_responses.py
+!python-src/compare_example.py
+!python-src/run_check.py
+!python-src/csv_mart.py
+!python-src/sandbox_entry.py
+!python-src/normalize_dataset.py

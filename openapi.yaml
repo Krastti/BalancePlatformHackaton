@@ -1,0 +1,1443 @@
+openapi: 3.0.3
+info:
+  title: BalancePlatform — API первого сквозного MVP
+  version: 0.3.0
+  description: |
+    Целевой контракт сравнения готовых ответов СПР.
+    Наборы регистрируются на сервере и содержат оба среза.
+    Сравнение выполняется в фоне. Отчёт доступен после успешного импорта.
+tags:
+  - name: Datasets
+  - name: Comparisons
+paths:
+  /api/datasets:
+    get:
+      tags: [Datasets]
+      operationId: listDatasets
+      summary: Список доступных наборов
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Страница наборов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/comparisons/datasets/{datasetId}/preview:
+    get:
+      tags: [Datasets]
+      operationId: previewDataset
+      summary: Пример пары решений из выбранного набора
+      parameters:
+        - name: datasetId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Метки срезов и решения по одной заявке
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [applicationId, beforeLabel, afterLabel, decisionBefore, decisionAfter]
+                properties:
+                  applicationId: {type: string}
+                  beforeLabel: {type: string}
+                  afterLabel: {type: string}
+                  decisionBefore: {type: string, enum: [APPROVE, REJECT]}
+                  decisionAfter: {type: string, enum: [APPROVE, REJECT]}
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Пара ответов недоступна для предпросмотра
+  /api/comparisons/datasets/{datasetId}/normalization-preview:
+    post:
+      tags: [Datasets]
+      operationId: previewNormalization
+      summary: Применить правила черновика к примеру пары
+      parameters:
+        - name: datasetId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              maxItems: 100
+              items:
+                type: object
+                required: [sourcePath, targetPath, type, excluded, arrayKeys]
+                properties:
+                  sourcePath: {type: array, items: {type: string}}
+                  targetPath: {type: array, items: {type: string}}
+                  type: {type: string, enum: [keep, string, number, boolean]}
+                  excluded: {type: boolean}
+                  arrayKeys: {type: array, items: {type: string}}
+      responses:
+        '200':
+          description: До 25 строк на срез в before и after либо диагностика в error
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Пример пары недоступен
+  /api/comparisons/datasets/{datasetId}/analysis-preview:
+    post:
+      tags: [Datasets]
+      operationId: previewAnalysisFields
+      summary: Показать группировку черновика на одной паре
+      parameters:
+        - name: datasetId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [normalization, analysisFields]
+              properties:
+                normalization: {type: array, maxItems: 100, items: {type: object}}
+                analysisFields:
+                  type: array
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [path, label, role, buckets]
+                    properties:
+                      path: {type: array, items: {type: string}}
+                      label: {type: string}
+                      role: {type: string, enum: [group]}
+                      buckets:
+                        type: array
+                        items:
+                          type: object
+                          required: [upper, label]
+                          properties:
+                            upper: {type: string, nullable: true}
+                            label: {type: string}
+      responses:
+        '200':
+          description: До 25 строк на срез с исходным значением и группой либо диагностика
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Пример пары недоступен
+  /api/comparisons:
+    post:
+      tags: [Comparisons]
+      operationId: createComparison
+      description: Перед созданием вызовите GET /api/comparisons/workspace и передавайте cookie BALANCE_WORKSPACE.
+      summary: Запустить сравнение двух срезов выбранного набора
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateComparisonRequest'
+      responses:
+        '202':
+          description: Запуск поставлен в очередь
+          headers:
+            Location:
+              description: Путь к статусу запуска
+              schema:
+                type: string
+                example: /api/comparisons/cecc2359-b397-46ef-b55c-6a8232aa69e8
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonRun'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    get:
+      tags: [Comparisons]
+      operationId: listComparisons
+      summary: История запусков, от новых к старым
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Страница запусков
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/comparisons/workspace:
+    get:
+      tags: [Comparisons]
+      operationId: initializeComparisonWorkspace
+      summary: Инициализировать рабочую область браузера
+      responses:
+        '204':
+          description: Рабочая область доступна, новому браузеру выдана cookie
+  /api/comparisons/configurations:
+    get:
+      tags: [Comparisons]
+      operationId: listComparisonConfigurations
+      summary: Сохранённые конфигурации рабочей области
+      responses:
+        '200':
+          description: Список конфигураций
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ComparisonConfiguration'
+    post:
+      tags: [Comparisons]
+      operationId: createComparisonConfiguration
+      summary: Сохранить новую конфигурацию
+      requestBody:
+        $ref: '#/components/requestBodies/ComparisonSelection'
+      responses:
+        '200':
+          $ref: '#/components/responses/ComparisonConfiguration'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/comparisons/configurations/{configurationId}:
+    parameters:
+      - name: configurationId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    post:
+      tags: [Comparisons]
+      operationId: updateComparisonConfiguration
+      summary: Обновить свою конфигурацию
+      requestBody:
+        $ref: '#/components/requestBodies/ComparisonSelection'
+      responses:
+        '200':
+          $ref: '#/components/responses/ComparisonConfiguration'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/comparisons/configurations/{configurationId}/v2:
+    get:
+      tags: [Comparisons]
+      operationId: readComparisonConfigurationV2
+      summary: Открыть сохранённую конфигурацию в модели v2
+      parameters:
+        - name: configurationId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Представление сохранённых настроек для обоих режимов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisConfiguration'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Comparisons]
+      operationId: updateComparisonConfigurationV2
+      summary: Обновить свою конфигурацию в модели v2
+      parameters:
+        - name: configurationId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalysisConfiguration'
+      responses:
+        '200':
+          description: Сохранённые настройки в модели v2
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisConfiguration'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/comparisons/configurations/v2:
+    get:
+      tags: [Comparisons]
+      operationId: listComparisonConfigurationsV2
+      summary: Конфигурации текущей рабочей области в модели v2
+      responses:
+        '200':
+          description: Сохранённые конфигурации
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AnalysisConfiguration'
+    post:
+      tags: [Comparisons]
+      operationId: createComparisonConfigurationV2
+      summary: Создать конфигурацию в модели v2
+      description: Для текущего исполнителя используйте пять этапов из примера и идентификатор из каталога наборов. Этапы CHECKS и FACTS можно поменять местами.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalysisConfiguration'
+            example:
+              schemaVersion: 2
+              name: Штатное сравнение
+              source:
+                kind: localPackage
+                datasetId: 29fa0db9-4d71-415c-a399-c92df7059271
+                format: sprJsonPair
+              normalization: []
+              analysisFields: []
+              stages:
+                - {id: normalize, type: NORMALIZATION, enabled: false, script: {kind: default}}
+                - {id: compare, type: COMPARISON, enabled: true, script: {kind: default}}
+                - {id: checks, type: CHECKS, enabled: false, script: {kind: default}}
+                - {id: facts, type: FACTS, enabled: false, script: {kind: default}}
+                - {id: publish, type: IMPORT, enabled: true, script: {kind: default}}
+              checks: []
+      responses:
+        '200':
+          description: Сохранённые настройки в модели v2
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisConfiguration'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/comparisons/configurations/scripts/source:
+    get:
+      tags: [Comparisons]
+      operationId: copyConfigurationScript
+      summary: Получить редактируемую копию файла каталога
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          schema: {type: string, enum: [check, procedure]}
+        - name: name
+          in: query
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Код в UTF-8
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [code]
+                properties:
+                  code: {type: string}
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/comparisons/configurations/scripts/validate:
+    post:
+      tags: [Comparisons]
+      operationId: validateConfigurationScript
+      summary: Статически проверить код без исполнения
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: {type: string}
+      responses:
+        '200':
+          description: Результат синтаксической проверки и признак объявления CHECK
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/comparisons/{id}/journal/parameters:
+    get:
+      tags: [Comparisons]
+      operationId: readFrozenRunParameters
+      summary: Параметры из снимка запуска
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Параметры либо пустой объект
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/comparisons/configurations/checks:
+    get:
+      tags: [Comparisons]
+      operationId: listComparisonCheckFiles
+      summary: Имена доступных файлов проверок
+      responses:
+        '200':
+          description: Доступные файлы
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {type: string}
+        '503':
+          description: Настроенный каталог проверок недоступен
+  /api/comparisons/configurations/procedures:
+    get:
+      tags: [Comparisons]
+      operationId: listComparisonProcedures
+      summary: Имена доступных файлов процедур сравнения
+      responses:
+        '200':
+          description: Доступные процедуры
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {type: string}
+        '503':
+          description: Настроенный каталог процедур недоступен
+  /api/comparisons/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ComparisonId'
+    get:
+      tags: [Comparisons]
+      operationId: getComparison
+      summary: Статус запуска
+      responses:
+        '200':
+          description: Текущее состояние запуска
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonRun'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/comparisons/{id}/journal/{stage}/source:
+    parameters:
+      - $ref: '#/components/parameters/ComparisonId'
+      - name: stage
+        in: path
+        required: true
+        schema: {type: string, enum: [NORMALIZATION, COMPARISON, CHECKS, FACTS]}
+    get:
+      tags: [Comparisons]
+      operationId: getComparisonStageSource
+      summary: Сохранённые исходники этапа
+      responses:
+        '200':
+          description: Файлы этапа в порядке подготовки
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [name, content]
+                  properties:
+                    name: {type: string}
+                    content: {type: string}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/comparisons/{id}/report:
+    parameters:
+      - $ref: '#/components/parameters/ComparisonId'
+    get:
+      tags: [Comparisons]
+      operationId: getComparisonReport
+      summary: Счётчики и матрица переходов завершённого запуска
+      responses:
+        '200':
+          description: Сводка сравнения
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ReportUnavailable'
+  /api/comparisons/{id}/replay:
+    parameters:
+      - $ref: '#/components/parameters/ComparisonId'
+    post:
+      tags: [Comparisons]
+      operationId: replayComparison
+      summary: Повторить завершённый запуск из сохранённого снимка
+      responses:
+        '202':
+          description: Повтор поставлен в очередь
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonRun'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Запуск не содержит необходимых отпечатков и снимка
+  /api/comparisons/{id}/checks:
+    parameters:
+      - $ref: '#/components/parameters/ComparisonId'
+    get:
+      tags: [Comparisons]
+      operationId: getComparisonChecks
+      summary: Общая таблица вердиктов и список исполненных проверок
+      responses:
+        '200':
+          description: Сохранённый отчёт проверок
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [checks, rows, skipped]
+                properties:
+                  checks:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, label, row_count]
+                      properties:
+                        id: {type: string}
+                        label: {type: string}
+                        row_count: {type: integer, minimum: 0}
+                        status: {type: string, enum: [NO_DATA, ERROR]}
+                        message: {type: string, description: Диагностика отдельной проверки со статусом ERROR}
+                  skipped:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, label, status]
+                      properties:
+                        id: {type: string}
+                        label: {type: string}
+                        status: {type: string, enum: [SKIPPED]}
+                  rows:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CheckRow'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ReportUnavailable'
+  /api/comparisons/{id}/checks.html:
+    parameters:
+      - $ref: '#/components/parameters/ComparisonId'
+    get:
+      tags: [Comparisons]
+      operationId: getComparisonChecksHtml
+      summary: Автономный HTML-отчёт со ссылками в приложение
+      parameters:
+        - name: download
+          in: query
+          schema: {type: boolean, default: false}
+      responses:
+        '200':
+          description: Отчёт для просмотра или скачивания
+          content:
+            text/html:
+              schema: {type: string}
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ReportUnavailable'
+  /api/comparisons/{id}/pivot:
+    parameters:
+      - $ref: '#/components/parameters/ComparisonId'
+    get:
+      tags: [Comparisons]
+      operationId: getComparisonPivot
+      summary: Группы сводной с числом уникальных заявок
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: rows
+          in: query
+          schema: {type: string, enum: [PATH, PATH_VALUE, FIELD_VALUES, IMPACT, PREFIX, CLASS, SUFFIX, KEY, ARRAY_KEY, VALUE], default: PATH}
+        - name: columns
+          in: query
+          schema: {type: string, enum: [SOURCE, CHANGE_TYPE, DIFF_FLAG, SOURCE_DIFF], default: SOURCE_DIFF}
+        - name: prefix
+          in: query
+          description: Префикс поля. Для FIELD_VALUES указывается точный путь поля.
+          schema: {type: string}
+        - name: segment
+          in: query
+          schema: {type: string, enum: [PRODUCT, PARTNER_TYPE, ROUTING_METHOD, PD_MODEL_AFTER]}
+        - name: segmentValue
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: {type: string}
+        - name: rowValue
+          in: query
+          style: form
+          explode: true
+          schema: {type: array, items: {type: string}}
+        - name: columnValue
+          in: query
+          style: form
+          explode: true
+          schema: {type: array, items: {type: string}}
+        - name: filterRows
+          in: query
+          description: true при включённом фильтре строк; пустой список означает отсутствие строк.
+          schema: {type: boolean, default: false}
+        - name: filterColumns
+          in: query
+          description: true при включённом фильтре столбцов; пустой список означает отсутствие столбцов.
+          schema: {type: boolean, default: false}
+      responses:
+        '200':
+          description: Страница из 25 групп, заявок или атрибутов
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hasNext]
+                properties:
+                  hasNext: {type: boolean}
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PivotCount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ReportUnavailable'
+  /api/comparisons/{id}/pivot/field-labels:
+    get:
+      tags: [Comparisons]
+      operationId: readPivotFieldLabels
+      summary: Подписи полей из снимка опубликованного запуска
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Подписи по исходным путям
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {type: string}
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/comparisons/{id}/pivot/dimension-values:
+    parameters:
+      - $ref: '#/components/parameters/ComparisonId'
+    get:
+      tags: [Comparisons]
+      operationId: listComparisonPivotDimensionValues
+      summary: Значения строк или столбцов для фильтра сводной
+      parameters:
+        - name: rows
+          in: query
+          required: true
+          schema: {type: string, enum: [PATH, PATH_VALUE, FIELD_VALUES, IMPACT, PREFIX, CLASS, SUFFIX, KEY, ARRAY_KEY, VALUE]}
+        - name: columns
+          in: query
+          schema: {type: string, enum: [SOURCE, CHANGE_TYPE, DIFF_FLAG, SOURCE_DIFF], default: SOURCE_DIFF}
+        - name: prefix
+          in: query
+          schema: {type: string}
+        - name: axis
+          in: query
+          required: true
+          schema: {type: string, enum: [ROW, COLUMN]}
+        - name: segment
+          in: query
+          schema: {type: string, enum: [PRODUCT, PARTNER_TYPE, ROUTING_METHOD, PD_MODEL_AFTER]}
+        - name: segmentValue
+          in: query
+          style: form
+          explode: true
+          schema: {type: array, items: {type: string}}
+      responses:
+        '200':
+          description: Отсортированные уникальные значения выбранной оси
+          content:
+            application/json:
+              schema: {type: array, items: {type: string}}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/comparisons/{id}/pivot/segment-values:
+    parameters:
+      - $ref: '#/components/parameters/ComparisonId'
+    get:
+      tags: [Comparisons]
+      operationId: listComparisonPivotSegmentValues
+      summary: Значения выбранного поля разреза
+      parameters:
+        - name: segment
+          in: query
+          required: true
+          schema: {type: string, enum: [PRODUCT, PARTNER_TYPE, ROUTING_METHOD, PD_MODEL_AFTER]}
+      responses:
+        '200':
+          description: Отсортированные уникальные значения из запуска
+          content:
+            application/json:
+              schema: {type: array, items: {type: string}}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/comparisons/{id}/pivot/tree-counts:
+    parameters:
+      - $ref: '#/components/parameters/ComparisonId'
+    get:
+      tags: [Comparisons]
+      operationId: getComparisonPivotTreeCounts
+      summary: Уникальные счётчики заявок для групп дерева
+      parameters:
+        - name: rows
+          in: query
+          required: true
+          schema: {type: string, enum: [PATH_VALUE, FIELD_VALUES, IMPACT]}
+        - name: columns
+          in: query
+          schema: {type: string, enum: [SOURCE, CHANGE_TYPE, DIFF_FLAG, SOURCE_DIFF], default: SOURCE_DIFF}
+        - name: prefix
+          in: query
+          schema: {type: string}
+        - name: segment
+          in: query
+          schema: {type: string, enum: [PRODUCT, PARTNER_TYPE, ROUTING_METHOD, PD_MODEL_AFTER]}
+        - name: segmentValue
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: {type: string}
+        - name: rowValue
+          in: query
+          style: form
+          explode: true
+          schema: {type: array, items: {type: string}}
+        - name: columnValue
+          in: query
+          style: form
+          explode: true
+          schema: {type: array, items: {type: string}}
+        - name: filterRows
+          in: query
+          schema: {type: boolean, default: false}
+        - name: filterColumns
+          in: query
+          schema: {type: boolean, default: false}
+      responses:
+        '200':
+          description: Счётчики для родительских узлов, до пагинации листьев
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/PivotTreeCount'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/ReportUnavailable'}
+  /api/comparisons/{id}/pivot/applications:
+    parameters:
+      - $ref: '#/components/parameters/ComparisonId'
+    get:
+      tags: [Comparisons]
+      operationId: listComparisonPivotApplications
+      summary: Заявки из выбранной ячейки
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: rows
+          in: query
+          required: true
+          schema: {type: string, enum: [PATH, PATH_VALUE, FIELD_VALUES, IMPACT, PREFIX, CLASS, SUFFIX, KEY, ARRAY_KEY, VALUE]}
+        - name: columns
+          in: query
+          required: true
+          schema: {type: string, enum: [SOURCE, CHANGE_TYPE, DIFF_FLAG, SOURCE_DIFF]}
+        - name: prefix
+          in: query
+          description: Префикс поля. Для FIELD_VALUES указывается точный путь поля.
+          schema: {type: string}
+        - name: segment
+          in: query
+          schema: {type: string, enum: [PRODUCT, PARTNER_TYPE, ROUTING_METHOD, PD_MODEL_AFTER]}
+        - name: segmentValue
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: {type: string}
+        - name: rowValue
+          in: query
+          style: form
+          explode: true
+          schema: {type: array, items: {type: string}}
+        - name: columnValue
+          in: query
+          style: form
+          explode: true
+          schema: {type: array, items: {type: string}}
+        - name: filterRows
+          in: query
+          schema: {type: boolean, default: false}
+        - name: filterColumns
+          in: query
+          schema: {type: boolean, default: false}
+        - name: row
+          in: query
+          schema: {type: string}
+        - name: groupLevel
+          in: query
+          schema: {type: string, enum: [PREFIX, CLASS, SUFFIX, ARRAY_KEY, KEY]}
+        - name: groupPath
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: {type: string}
+        - name: column
+          in: query
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Страница из 25 групп, заявок или атрибутов
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hasNext]
+                properties:
+                  hasNext: {type: boolean}
+                  items:
+                    type: array
+                    items: {type: string}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ReportUnavailable'
+  /api/comparisons/{id}/pivot/applications/{applicationId}/attributes:
+    parameters:
+      - $ref: '#/components/parameters/ComparisonId'
+      - name: applicationId
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      tags: [Comparisons]
+      operationId: listComparisonPivotAttributes
+      summary: Атрибуты заявки из выбранной ячейки
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: rows
+          in: query
+          required: true
+          schema: {type: string, enum: [PATH, PATH_VALUE, FIELD_VALUES, IMPACT, PREFIX, CLASS, SUFFIX, KEY, ARRAY_KEY, VALUE]}
+        - name: columns
+          in: query
+          required: true
+          schema: {type: string, enum: [SOURCE, CHANGE_TYPE, DIFF_FLAG, SOURCE_DIFF]}
+        - name: prefix
+          in: query
+          description: Префикс поля. Для FIELD_VALUES указывается точный путь поля.
+          schema: {type: string}
+        - name: segment
+          in: query
+          schema: {type: string, enum: [PRODUCT, PARTNER_TYPE, ROUTING_METHOD, PD_MODEL_AFTER]}
+        - name: segmentValue
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: {type: string}
+        - name: rowValue
+          in: query
+          style: form
+          explode: true
+          schema: {type: array, items: {type: string}}
+        - name: columnValue
+          in: query
+          style: form
+          explode: true
+          schema: {type: array, items: {type: string}}
+        - name: filterRows
+          in: query
+          schema: {type: boolean, default: false}
+        - name: filterColumns
+          in: query
+          schema: {type: boolean, default: false}
+        - name: row
+          in: query
+          schema: {type: string}
+        - name: groupLevel
+          in: query
+          schema: {type: string, enum: [PREFIX, CLASS, SUFFIX, ARRAY_KEY, KEY]}
+        - name: groupPath
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: {type: string}
+        - name: column
+          in: query
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Страница из 25 групп, заявок или атрибутов
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hasNext]
+                properties:
+                  hasNext: {type: boolean}
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PivotAttribute'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ReportUnavailable'
+  /api/comparisons/{id}/applications:
+    parameters:
+      - $ref: '#/components/parameters/ComparisonId'
+    get:
+      tags: [Comparisons]
+      operationId: listComparisonApplications
+      summary: Заявки завершённого запуска, отсортированные по ID
+      description: Фильтры применяются совместно до пагинации. Если фильтр опущен, ограничение по нему отсутствует.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - name: hasDiff
+          in: query
+          schema:
+            type: boolean
+        - name: decisionChanged
+          in: query
+          schema:
+            type: boolean
+        - name: decisionBefore
+          in: query
+          schema:
+            $ref: '#/components/schemas/Decision'
+        - name: decisionAfter
+          in: query
+          schema:
+            $ref: '#/components/schemas/Decision'
+      responses:
+        '200':
+          description: Страница заявок
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonApplicationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ReportUnavailable'
+  /api/comparisons/{id}/applications/{applicationId}:
+    parameters:
+      - $ref: '#/components/parameters/ComparisonId'
+      - name: applicationId
+        in: path
+        required: true
+        description: APP_ID из имени исходного JSON без расширения
+        schema:
+          type: string
+          minLength: 1
+          example: I32554358
+    get:
+      tags: [Comparisons]
+      operationId: getComparisonApplication
+      summary: Решения и отличия по полям одной заявки
+      responses:
+        '200':
+          description: Детализация заявки
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonApplicationDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ReportUnavailable'
+components:
+  parameters:
+    ComparisonId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    Size:
+      name: size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+  responses:
+    ComparisonConfiguration:
+      description: Сохранённая конфигурация
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ComparisonConfiguration'
+    BadRequest:
+      description: Некорректный JSON, идентификатор или параметр запроса
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    NotFound:
+      description: Набор, запуск или заявка в запуске не найдены
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    ReportUnavailable:
+      description: Отчёт доступен только в статусе COMPLETED. Для PENDING и RUNNING код COMPARISON_NOT_FINISHED, для FAILED код COMPARISON_FAILED.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+  requestBodies:
+    ComparisonSelection:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ComparisonSelection'
+  schemas:
+    AnalysisConfiguration:
+      type: object
+      required: [schemaVersion, name, source, normalization, analysisFields, stages, checks]
+      properties:
+        schemaVersion: {type: integer, enum: [2]}
+        id: {type: string, format: uuid, readOnly: true}
+        name: {type: string}
+        source:
+          type: object
+          required: [kind, datasetId, format]
+          properties:
+            kind: {type: string, enum: [localPackage]}
+            datasetId: {type: string, format: uuid}
+            format: {type: string, enum: [sprJsonPair]}
+        normalization: {type: array, items: {type: object}}
+        analysisFields: {type: array, items: {type: object}}
+        stages: {type: array, items: {type: object}}
+        checks:
+          type: array
+          maxItems: 41
+          description: Порядок шаблонов и правил. Python из редактора выполняется последним.
+          items:
+            type: object
+            required: [id, enabled]
+            properties:
+              id: {type: string}
+              enabled: {type: boolean}
+              script: {type: object, nullable: true}
+              rule:
+                type: object
+                nullable: true
+                required: [type, label, path, source]
+                properties:
+                  type: {type: string, enum: [threshold, range, share, change]}
+                  label: {type: string}
+                  path: {type: string}
+                  source: {type: string, enum: [BEFORE, AFTER]}
+                  min: {type: string, description: Нижняя граница диапазона}
+                  max: {type: string, description: Верхняя граница либо максимальная доля от 0 до 1}
+              parameters: {type: object, nullable: true}
+        legacyParameters: {type: object, nullable: true}
+    ApiError:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+    Count:
+      type: integer
+      format: int64
+      minimum: 0
+    PageMetadata:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+          minimum: 0
+        size:
+          type: integer
+          minimum: 1
+          maximum: 100
+        totalElements:
+          $ref: '#/components/schemas/Count'
+        totalPages:
+          type: integer
+          minimum: 0
+    ApplicationDataset:
+      type: object
+      required: [id, name, sourceRunId, applicationCount]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        sourceRunId:
+          type: string
+          example: RUN-20260827-0001
+        applicationCount:
+          $ref: '#/components/schemas/Count'
+    DatasetPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApplicationDataset'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    CreateComparisonRequest:
+      type: object
+      additionalProperties: false
+      required: [datasetId]
+      oneOf:
+        - not:
+            anyOf:
+              - required: [configurationId]
+              - required: [draft]
+        - required: [configurationId]
+          not:
+            required: [draft]
+        - required: [draft]
+          not:
+            required: [configurationId]
+      properties:
+        datasetId:
+          type: string
+          format: uuid
+        configurationId:
+          type: string
+          format: uuid
+          description: Идентификатор конфигурации текущей рабочей области
+        draft:
+          $ref: '#/components/schemas/AnalysisConfiguration'
+          description: Настройки для разового запуска без сохранения в списке конфигураций
+    RunStatus:
+      type: string
+      enum: [PENDING, RUNNING, COMPLETED, FAILED]
+    ComparisonSelection:
+      type: object
+      required: [name, datasetId, checks]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        datasetId: {type: string, format: uuid}
+        checks:
+          type: array
+          maxItems: 40
+          uniqueItems: true
+          items: {type: string}
+        procedure:
+          type: string
+          nullable: true
+          description: Имя установленной процедуры сравнения
+        procedureCode:
+          type: string
+          nullable: true
+          description: Python процедуры из редактора, до 256 КиБ, взаимоисключающее с procedure поле
+        checkCode:
+          type: string
+          nullable: true
+          description: Дополнительная проверка из редактора, до 256 КиБ
+        normalizer:
+          type: string
+          nullable: true
+          description: Имя установленного нормализатора
+        normalizerCode:
+          type: string
+          nullable: true
+          description: Python нормализации из редактора, взаимоисключающее с normalizer поле
+        factsProcedure:
+          type: string
+          nullable: true
+          description: Имя установленной процедуры подготовки фактов сводной
+        factsCode:
+          type: string
+          nullable: true
+          description: Python подготовки фактов из редактора, до 256 КиБ, взаимоисключающее с factsProcedure поле
+        parameters:
+          type: object
+          nullable: true
+          additionalProperties: false
+          properties:
+            procedure: {type: object}
+            checks:
+              type: object
+              additionalProperties: {type: object}
+    ComparisonConfiguration:
+      allOf:
+        - $ref: '#/components/schemas/ComparisonSelection'
+        - type: object
+          required: [id]
+          properties:
+            id: {type: string, format: uuid}
+    ComparisonRun:
+      type: object
+      required: [id, datasetId, status, createdAt]
+      properties:
+        input:
+          type: object
+          properties:
+            sourceRunId: {type: string}
+            schemaVersion: {type: integer}
+            sha256: {type: string}
+            expectedSha256: {type: string}
+            runtimeSha256: {type: string}
+            expectedRuntimeSha256: {type: string}
+        id:
+          type: string
+          format: uuid
+        datasetId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/RunStatus'
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        error:
+          description: Присутствует в статусе FAILED
+          allOf:
+            - $ref: '#/components/schemas/ApiError'
+        journal:
+          description: Этапы нового запуска. У прежних запусков поле отсутствует.
+          type: array
+          items:
+            $ref: '#/components/schemas/ComparisonStage'
+        configuration:
+          description: Сохранённый выбор на момент постановки в очередь. Текст редактора доступен в настройках и журнале.
+          allOf:
+            - $ref: '#/components/schemas/ComparisonConfiguration'
+    ComparisonStage:
+      type: object
+      required: [name, status]
+      properties:
+        name: {type: string, enum: [QUEUE, NORMALIZATION, COMPARISON, CHECKS, FACTS, IMPORT]}
+        status: {type: string, enum: [PENDING, RUNNING, COMPLETED, FAILED, SKIPPED]}
+        startedAt: {type: string, format: date-time}
+        finishedAt: {type: string, format: date-time}
+    ComparisonPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComparisonRun'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    ComparisonReport:
+      type: object
+      required: [comparisonId, totalApplications, applicationsWithDifferences, applicationsWithDecisionChanges, transitionMatrix, checksAvailable, pivotAvailable, segmentsAvailable]
+      properties:
+        comparisonId:
+          type: string
+          format: uuid
+        totalApplications:
+          $ref: '#/components/schemas/Count'
+        applicationsWithDifferences:
+          $ref: '#/components/schemas/Count'
+        applicationsWithDecisionChanges:
+          $ref: '#/components/schemas/Count'
+        transitionMatrix:
+          $ref: '#/components/schemas/TransitionMatrix'
+        checksAvailable: {type: boolean}
+        pivotAvailable: {type: boolean}
+        segmentsAvailable: {type: boolean}
+    CheckRow:
+      type: object
+      required: [LABEL, SOURCE, ARGUMENT, CNT, TOTAL, METRIC, APP_IDS, RESULT, CONFIDENCE]
+      properties:
+        LABEL: {type: string}
+        SOURCE: {type: string, enum: [BEFORE, AFTER]}
+        ARGUMENT: {type: string}
+        CNT: {type: integer, minimum: 0}
+        TOTAL: {type: integer, minimum: 0}
+        METRIC: {type: number}
+        APP_IDS:
+          type: array
+          items: {type: string}
+        RESULT:
+          type: string
+          enum: [PASS, FAIL, SIGNAL]
+          description: PASS означает соблюдение критерия, FAIL — нарушение критерия, SIGNAL — обнаруженное изменение без утверждения о нарушении.
+        CONFIDENCE: {type: string, enum: [HIGH, LOW]}
+    PivotCount:
+      type: object
+      required: [row, column, count]
+      properties:
+        row: {type: string}
+        column: {type: string}
+        count: {type: integer, minimum: 1}
+        affectedApplications:
+          type: integer
+          minimum: 1
+          description: Уникальные заявки с изменением поля во всех его значениях и срезах, для IMPACT
+    PivotTreeCount:
+      type: object
+      required: [level, path, column, count]
+      properties:
+        level: {type: string, enum: [PREFIX, CLASS, SUFFIX, ARRAY_KEY, KEY]}
+        path:
+          type: array
+          items: {type: string}
+          description: Значения координат группы по уровням от PREFIX
+        column: {type: string}
+        count: {type: integer, minimum: 1, description: Уникальные заявки в группе и столбце}
+    PivotAttribute:
+      type: object
+      required: [path, arrayKey, valueBefore, valueAfter, changeType]
+      properties:
+        path: {type: string}
+        arrayKey: {type: string}
+        valueBefore: {type: string, nullable: true}
+        valueAfter: {type: string, nullable: true}
+        changeType: {type: string, enum: [SAME, VALUE_CHANGED, ATTRIBUTE_NEW, ATTRIBUTE_LOST]}
+    TransitionMatrix:
+      type: object
+      required: [approveToApprove, approveToReject, rejectToApprove, rejectToReject]
+      properties:
+        approveToApprove:
+          $ref: '#/components/schemas/Count'
+        approveToReject:
+          $ref: '#/components/schemas/Count'
+        rejectToApprove:
+          $ref: '#/components/schemas/Count'
+        rejectToReject:
+          $ref: '#/components/schemas/Count'
+    Decision:
+      type: string
+      enum: [APPROVE, REJECT]
+    ComparisonApplicationSummary:
+      type: object
+      required: [applicationId, decisionBefore, decisionAfter, hasDiff, decisionChanged]
+      properties:
+        applicationId:
+          type: string
+          example: I32554358
+        decisionBefore:
+          $ref: '#/components/schemas/Decision'
+        decisionAfter:
+          $ref: '#/components/schemas/Decision'
+        hasDiff:
+          type: boolean
+        decisionChanged:
+          type: boolean
+    ComparisonApplicationPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComparisonApplicationSummary'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    ComparisonApplicationDetail:
+      allOf:
+        - $ref: '#/components/schemas/ComparisonApplicationSummary'
+        - type: object
+          required: [differences]
+          properties:
+            differences:
+              type: array
+              description: Отличия в порядке пути и ключа массива
+              items:
+                $ref: '#/components/schemas/AttributeDifference'
+    AttributeDifference:
+      type: object
+      required: [path, arrayKey, valueBefore, valueAfter, changeType]
+      properties:
+        path:
+          type: string
+        arrayKey:
+          type: string
+          description: Пустая строка для поля вне массива
+        valueBefore:
+          type: string
+          nullable: true
+          description: null для отсутствующего поля. Исходное значение JSON null представлено строкой NULL.
+        valueAfter:
+          type: string
+          nullable: true
+          description: null для отсутствующего поля. Исходное значение JSON null представлено строкой NULL.
+        changeType:
+          type: string
+          enum: [VALUE_CHANGED, ATTRIBUTE_NEW, ATTRIBUTE_LOST]

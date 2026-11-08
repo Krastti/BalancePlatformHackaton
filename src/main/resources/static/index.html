@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Сравнение готовых ответов СПР в BalancePlatform">
+    <title>BalancePlatform — сравнение стратегий</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap">
+    <link rel="stylesheet" href="css/balance-platform.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <script defer src="js/balance-platform.js"></script>
+</head>
+<body>
+<div id="balance-mock" data-theme="light" aria-label="Рабочая область BalancePlatform">
+ <aside class="bp-side">
+  <div class="bp-brand"><i data-lucide="scale" aria-hidden="true"></i><div class="bp-brand-text">BALANCE<small style="display:block">PLATFORM</small></div></div>
+  <hr><div class="bp-eyebrow">РАБОЧАЯ ОБЛАСТЬ</div>
+  <nav class="bp-nav" aria-label="Разделы сервиса">
+   <button type="button" class="cursor-interaction" aria-current="page" data-section="report" aria-label="Сравнение стратегий"><i data-lucide="git-compare-arrows" aria-hidden="true"></i><span>Сравнение</span></button>
+   <button type="button" class="cursor-interaction" data-section="datasets" aria-label="Наборы заявок"><i data-lucide="database" aria-hidden="true"></i><span>Наборы заявок</span></button>
+   <button type="button" class="cursor-interaction" data-section="history" aria-label="История запусков"><i data-lucide="history" aria-hidden="true"></i><span>История запусков</span></button>
+  </nav>
+  <div class="bp-side-bottom"><hr style="margin-bottom:16px"><b>Решения под контролем</b>Одинаковые данные.<br>Две версии стратегии.</div>
+ </aside>
+ <div class="bp-work">
+  <header class="bp-top"><div class="bp-top-path">Рабочая область <span style="padding:0 8px">/</span> <span id="bp-breadcrumb">Сравнение стратегий</span></div><div class="bp-top-right"><div class="bp-theme-switch" role="group" aria-label="Цветовая тема"><button type="button" class="cursor-interaction" data-theme-choice="light" aria-pressed="true"><i data-lucide="sun" aria-hidden="true"></i>Светлая</button><button type="button" class="cursor-interaction" data-theme-choice="dark" aria-pressed="false"><i data-lucide="moon" aria-hidden="true"></i>Тёмная</button></div><div class="bp-account"><span class="bp-avatar">РА</span></div></div></header>
+  <main class="bp-main">
+   <div class="bp-heading"><div><h1 id="bp-title">Сравнение стратегий</h1><p class="bp-muted" style="font-size:12px;margin-top:3px">Последствия изменений — до запуска в работу</p></div><button type="button" class="bp-button bp-primary cursor-interaction" id="bp-new"><i data-lucide="plus" aria-hidden="true"></i>Новое сравнение</button></div>
+   <section class="bp-panel" id="bp-create" hidden aria-label="Настройка сравнения">
+    <div class="bp-panel-head"><h2>Новое сравнение</h2><button type="button" id="bp-cancel" class="bp-close cursor-interaction" aria-label="Закрыть форму">×</button></div>
+    <form id="bp-form" class="bp-form">
+     <p id="bp-wizard-progress" class="bp-tag" aria-live="polite"></p>
+     <div class="bp-wizard-page" data-wizard-page="0">
+      <h3 tabindex="-1">Источник</h3>
+      <p class="bp-muted">Выберите папку с готовыми ответами, зарегистрированную на сервере.</p>
+      <label>Набор готовых ответов<select id="bp-dataset" required></select></label>
+     </div>
+     <div class="bp-wizard-page" data-wizard-page="1" hidden>
+      <h3 tabindex="-1">Формат и предпросмотр</h3>
+      <p>Манифест и два среза JSON. Ответы сопоставляются по имени файла заявки.</p>
+      <p id="bp-wizard-source" class="bp-muted"></p>
+      <p id="bp-wizard-preview-status" class="bp-muted" role="status"></p>
+      <dl id="bp-wizard-preview" hidden>
+       <dt>Заявка</dt><dd id="bp-wizard-preview-id"></dd>
+       <dt id="bp-wizard-before-label"></dt><dd id="bp-wizard-before"></dd>
+       <dt id="bp-wizard-after-label"></dt><dd id="bp-wizard-after"></dd>
+      </dl>
+     </div>
+     <fieldset class="bp-configuration" disabled>
+      <legend>Конфигурация запуска</legend>
+      <div class="bp-wizard-page" data-wizard-page="2" hidden>
+      <h3 tabindex="-1">Приведение данных</h3>
+      <p id="bp-inline-summary" class="bp-muted" hidden></p>
+      <details id="bp-normalization-editor">
+       <summary>Табличные правила приведения</summary>
+       <p class="bp-muted">Укажите путь через точку. Для вложенных массивов добавьте отдельную строку на каждый уровень. Несколько полей ключа перечислите через запятую.</p>
+       <div class="bp-table-wrap">
+        <table>
+         <thead><tr><th>Исходный путь</th><th>Целевой путь</th><th>Действие или тип</th><th>Ключи массива</th><th>Строка</th></tr></thead>
+         <tbody id="bp-normalization-rows"></tbody>
+        </table>
+       </div>
+       <button type="button" id="bp-normalization-add" class="bp-button cursor-interaction">Добавить правило</button>
+       <button type="button" id="bp-normalization-preview-button" class="bp-button cursor-interaction">Показать результат на паре</button>
+      </details>
+      <p class="bp-muted">Сохраните выбранную процедуру и проверки, чтобы применить их к запуску.</p>
+      <details id="bp-analysis-editor">
+       <summary>Поля анализа и интервалы</summary>
+       <p class="bp-muted">Выбранные поля попадут в сводную. Пустая таблица оставляет все поля. Интервалы задаются по одному на строку, например «0.5 = Низкий» и «* = Высокий».</p>
+       <div class="bp-table-wrap">
+        <table>
+         <thead><tr><th>Путь после приведения</th><th>Подпись</th><th>Верхние границы и подписи</th><th>Строка</th></tr></thead>
+         <tbody id="bp-analysis-rows"></tbody>
+        </table>
+       </div>
+       <button type="button" id="bp-analysis-add" class="bp-button cursor-interaction">Добавить поле анализа</button>
+       <button type="button" id="bp-analysis-preview-button" class="bp-button cursor-interaction">Предпросмотр группировки</button>
+      </details>
+       <p id="bp-normalization-preview-status" class="bp-muted" role="status"></p>
+       <div id="bp-normalization-preview" class="bp-table-wrap" hidden>
+        <table>
+         <thead><tr><th>Срез</th><th>Путь результата</th><th>Ключ массива</th><th>Значение</th><th>Группа</th></tr></thead>
+         <tbody id="bp-normalization-preview-rows"></tbody>
+        </table>
+       </div>
+      <label>Конфигурация запуска<select id="bp-configuration"><option value="">Хакатон · базовый анализ</option></select></label>
+      <section id="bp-preset-summary" class="bp-preset-summary" aria-live="polite">
+       <strong>Предустановленная конфигурация хакатона</strong>
+       <p>Для запуска выберите зарегистрированный набор с парными ответами BEFORE/AFTER. После сравнения выполняются включённые проверки.</p>
+       <p id="bp-preset-script-list" class="bp-muted">Загрузка списка проверок…</p>
+      </section>
+      <label>Имя конфигурации<input id="bp-configuration-name" maxlength="100" placeholder="Например, проверка дрифта"></label>
+      <label>Нормализация<select id="bp-configuration-normalizer">
+       <option value="">В составе процедуры сравнения</option>
+      </select></label>
+      <label>Процедура сравнения<select id="bp-configuration-procedure">
+       <option value="">Штатная процедура</option>
+      </select></label>
+      <label>Подготовка фактов<select id="bp-configuration-facts">
+       <option value="">Все строки сравнения</option>
+      </select></label>
+      </div>
+      <div class="bp-wizard-page" data-wizard-page="3" hidden>
+      <h3 tabindex="-1">Проверки</h3>
+      <p class="bp-muted">Отметьте проверки, которые войдут в отчёт.</p>
+      <div id="bp-configuration-checks"></div>
+      <button type="button" id="bp-rule-add" class="bp-button">Добавить условие</button>
+      <details data-expert-only hidden>
+       <summary>Python из редактора</summary>
+       <div class="bp-configuration-actions">
+        <label>Этап для копирования и проверки<select id="bp-script-target">
+         <option value="normalizer">Нормализация</option>
+         <option value="procedure">Сравнение</option>
+         <option value="facts">Подготовка фактов</option>
+         <option value="check">Дополнительная проверка</option>
+        </select></label>
+        <label>Исходный файл<select id="bp-script-file"></select></label>
+        <button type="button" id="bp-script-copy" class="bp-button">Загрузить исходник</button>
+        <button type="button" id="bp-script-validate" class="bp-button">Проверить код</button>
+       </div>
+       <p id="bp-script-status" class="bp-muted" role="status"></p>
+       <details id="bp-script-diff" hidden>
+        <summary>Различия с загруженным исходником</summary>
+        <pre id="bp-script-diff-text"></pre>
+       </details>
+       <label>Код нормализации<textarea id="bp-normalizer-code" maxlength="262144" rows="8" spellcheck="false"></textarea></label>
+       <label>Код процедуры сравнения<textarea id="bp-procedure-code" maxlength="262144" rows="9" spellcheck="false"></textarea></label>
+       <label>Код подготовки фактов<textarea id="bp-facts-code" maxlength="262144" rows="8" spellcheck="false"></textarea></label>
+       <label>Код дополнительной проверки<textarea id="bp-check-code" maxlength="262144" rows="9" spellcheck="false"></textarea></label>
+       <p class="bp-muted">Для каждого этапа используйте один источник. Очистите код из редактора, если хотите выбрать файл.</p>
+      </details>
+      <details data-expert-only hidden>
+       <summary>Параметры запуска</summary>
+       <label>JSON параметров<textarea id="bp-configuration-parameters" maxlength="32768" rows="6" spellcheck="false" placeholder='{"procedure": {}, "checks": {}}'></textarea></label>
+      </details>
+      </div>
+      <div class="bp-wizard-page" data-wizard-page="4" hidden>
+      <h3 tabindex="-1">Порядок и запуск</h3>
+      <p>Сравнение выполняется после приведения. Проверки и подготовка фактов используют результаты сравнения. В конце публикуется отчёт.</p>
+      <p class="bp-muted">Порядок этапов задаётся системой.</p>
+      <ol id="bp-expert-stages"></ol>
+      <p id="bp-wizard-summary" class="bp-muted"></p>
+      <div class="bp-configuration-actions">
+       <button type="button" class="bp-button cursor-interaction" id="bp-save-configuration" disabled>Сохранить</button>
+       <button type="button" class="bp-button cursor-interaction" id="bp-copy-configuration" disabled>Сохранить как новую</button>
+      </div>
+      </div>
+     </fieldset>
+     <p id="bp-configuration-status" class="bp-muted" role="status"></p>
+     <div class="bp-configuration-actions">
+      <button type="button" id="bp-wizard-back" class="bp-button cursor-interaction" hidden>Назад</button>
+      <button type="button" id="bp-wizard-next" class="bp-button bp-primary cursor-interaction" disabled>Далее</button>
+      <button type="submit" id="bp-start" class="bp-button bp-primary cursor-interaction" hidden disabled>Запустить сравнение</button>
+     </div>
+    </form>
+   </section>
+   <p id="bp-status" class="bp-insight" role="status" hidden></p>
+   <details class="bp-panel bp-run-journal" id="bp-journal" hidden aria-labelledby="bp-journal-title">
+    <summary class="bp-panel-head"><div><h2 id="bp-journal-title">Журнал запуска</h2><small id="bp-journal-summary" class="bp-muted"></small></div></summary>
+    <div class="bp-panel-body">
+     <p id="bp-journal-input" class="bp-muted"></p>
+     <button type="button" id="bp-replay" class="bp-button" hidden>Повторить из снимка</button>
+    </div>
+    <ol class="bp-journal-stages" id="bp-journal-stages"></ol>
+    <section class="bp-panel-body" id="bp-stage-source" hidden aria-labelledby="bp-stage-source-title">
+     <div class="bp-panel-head"><h2 id="bp-stage-source-title" tabindex="-1">Код этапа</h2><button id="bp-stage-source-close" class="bp-close cursor-interaction" type="button" aria-label="Закрыть код">×</button></div>
+     <div id="bp-stage-source-files"></div>
+    </section>
+   </details>
+   <section class="bp-panel" id="bp-check-dashboard" hidden aria-labelledby="bp-check-dashboard-title">
+    <div class="bp-panel-head"><div><h2 id="bp-check-dashboard-title" tabindex="-1">Критические проверки</h2><small id="bp-check-run-id" class="bp-muted"></small></div>
+     <div class="bp-configuration-actions">
+      <button type="button" id="bp-check-dashboard-pivot" class="bp-button">Сводная таблица</button>
+      <a id="bp-check-dashboard-report" class="bp-button" target="_blank" rel="noopener">Отчёт проверок</a>
+     </div></div>
+    <div class="bp-panel-body">
+     <div id="bp-check-summary" class="bp-muted" role="status"></div>
+     <div id="bp-check-signals" class="bp-check-signals" aria-live="polite"></div>
+     <div id="bp-check-states" class="bp-check-states"></div>
+     <details class="bp-panel bp-check-log">
+      <summary>Журнал проверок и скриптов <small id="bp-check-log-summary" class="bp-muted"></small></summary>
+      <div id="bp-check-execution-log" class="bp-check-execution-log"></div>
+     </details>
+    </div>
+   </section>
+   <div id="bp-report" hidden>
+    <div class="bp-run"><b>Отчёт сравнения</b><span class="bp-tag">Завершён</span><span id="bp-run-id" class="bp-muted"></span></div>
+    <div class="bp-run">
+     <a class="bp-button bp-primary" id="bp-open-pivot" hidden>Открыть сводную таблицу</a>
+     <a class="bp-button" id="bp-open-prototype" hidden>Открыть как в прототипе</a>
+    </div>
+    <div class="bp-run" id="bp-check-links" hidden>
+     <a class="bp-button" id="bp-check-view" target="_blank" rel="noopener">Отчёт проверок</a>
+    </div>
+    <section class="bp-stats" aria-label="Ключевые показатели">
+     <button type="button" class="bp-stat cursor-interaction" data-group="all" aria-pressed="false"><span>Все заявки</span><strong class="bp-number" id="bp-total"></strong></button>
+     <button type="button" class="bp-stat cursor-interaction" data-group="diff" aria-pressed="false"><span>Заявки с отличиями</span><strong class="bp-number" id="bp-diff"></strong></button>
+     <button type="button" class="bp-stat cursor-interaction" data-group="changed" aria-pressed="false"><span>Решение изменилось</span><strong class="bp-number" id="bp-changed"></strong></button>
+    </section>
+    <div class="bp-two">
+     <section class="bp-panel">
+      <div class="bp-panel-head"><h2>Матрица переходов</h2></div>
+      <div class="bp-panel-body">
+       <p class="bp-muted">Решение до → решение после</p>
+       <div class="bp-matrix">
+        <button type="button" class="bp-cell cursor-interaction" data-group="aa" aria-pressed="false"><span>Одобрение → одобрение</span><strong></strong></button>
+        <button type="button" class="bp-cell cursor-interaction" data-group="ad" aria-pressed="false"><span>Одобрение → отказ</span><strong></strong></button>
+        <button type="button" class="bp-cell cursor-interaction" data-group="da" aria-pressed="false"><span>Отказ → одобрение</span><strong></strong></button>
+        <button type="button" class="bp-cell cursor-interaction" data-group="dd" aria-pressed="false"><span>Отказ → отказ</span><strong></strong></button>
+       </div>
+      </div>
+     </section>
+     <section class="bp-panel">
+      <div class="bp-panel-head"><h2>Одобрения по срезам</h2></div>
+      <div class="bp-panel-body">
+       <div class="bp-baseline"><div class="bp-bar-label"><span>До</span><b id="bp-approve-before"></b></div><div class="bp-track"><span id="bp-bar-before"></span></div></div>
+       <div class="bp-bar-label"><span>После</span><b id="bp-approve-after"></b></div><div class="bp-track"><span id="bp-bar-after"></span></div>
+       <div class="bp-delta"><span id="bp-approve-delta"></span> <small>изменение доли</small></div>
+      </div>
+     </section>
+    </div>
+    <section class="bp-panel" id="bp-list" hidden aria-labelledby="bp-list-title">
+     <div class="bp-list-head"><h2 id="bp-list-title" tabindex="-1">Заявки</h2></div>
+     <div class="bp-table-wrap"><table><thead><tr><th>Заявка</th><th>До</th><th>После</th><th>Отличия</th></tr></thead><tbody id="bp-rows"></tbody></table></div>
+     <div class="bp-table-footer" id="bp-list-footer"></div>
+    </section>
+    <section id="bp-detail" class="bp-detail" hidden aria-labelledby="bp-detail-title">
+     <div class="bp-panel-head"><h2 id="bp-detail-title" tabindex="-1">Заявка</h2><button type="button" id="bp-close-detail" class="bp-close cursor-interaction" aria-label="Закрыть детали">×</button></div>
+     <div class="bp-detail-content" id="bp-detail-content"></div>
+    </section>
+   </div>
+    <section class="bp-panel" id="bp-pivot" hidden aria-labelledby="bp-pivot-title">
+     <div class="bp-panel-head bp-pivot-head">
+      <h2 id="bp-pivot-title" tabindex="-1">Сводная по атрибутам</h2>
+      <a class="bp-button" id="bp-pivot-back">К отчёту сравнения</a>
+     </div>
+     <form id="bp-pivot-form" class="bp-pivot-form">
+      <label data-pivot-layout>Строки<select id="bp-pivot-rows" name="rows">
+       <option value="IMPACT">Изменения по полям</option>
+       <option value="PATH">Путь атрибута</option><option value="PATH_VALUE">Путь → значение / бакет</option><option value="KEY">Имя атрибута</option>
+       <option value="PREFIX">Первый сегмент пути</option><option value="CLASS">Второй сегмент пути</option>
+       <option value="SUFFIX">Остаток пути</option><option value="ARRAY_KEY">Ключ массива</option>
+       <option value="VALUE">Значение / бакет</option>
+      </select></label>
+      <label data-pivot-layout>Столбцы<select name="columns">
+       <option value="SOURCE_DIFF">Срез × признак изменения</option><option value="SOURCE">Срез</option>
+       <option value="CHANGE_TYPE">Тип изменения</option><option value="DIFF_FLAG">Признак изменения</option>
+      </select></label>
+      <div class="bp-pivot-value-filter" data-axis-filter="ROW">
+       <details><summary id="bp-pivot-row-summary">Все строки</summary>
+        <label>Поиск строк<input id="bp-pivot-row-search" type="search" placeholder="Найти строку"></label>
+        <div class="bp-pivot-filter-actions"><button class="bp-button" data-axis-select-all="ROW" type="button">Выбрать всё</button>
+         <button class="bp-button" data-axis-clear="ROW" type="button">Снять выбор</button></div>
+        <div class="bp-pivot-value-options" id="bp-pivot-row-options" role="group" aria-label="Значения строк"></div>
+       </details>
+      </div>
+      <div class="bp-pivot-value-filter" data-axis-filter="COLUMN">
+       <details><summary id="bp-pivot-column-summary">Все столбцы</summary>
+        <label>Поиск столбцов<input id="bp-pivot-column-search" type="search" placeholder="Найти столбец"></label>
+        <div class="bp-pivot-filter-actions"><button class="bp-button" data-axis-select-all="COLUMN" type="button">Выбрать всё</button>
+         <button class="bp-button" data-axis-clear="COLUMN" type="button">Снять выбор</button></div>
+        <div class="bp-pivot-value-options" id="bp-pivot-column-options" role="group" aria-label="Значения столбцов"></div>
+       </details>
+      </div>
+      <label>Префикс пути<input name="prefix" placeholder="decisionResult.decision"></label>
+      <label data-pivot-segment>Разрез<select id="bp-pivot-segment" name="segment">
+       <option value="">Все заявки</option><option value="PRODUCT">Продукт</option>
+       <option value="PARTNER_TYPE">Тип партнёра</option><option value="ROUTING_METHOD">Маршрутизация</option>
+       <option value="PD_MODEL_AFTER">Целевая модель после</option>
+      </select></label>
+      <div class="bp-pivot-value-filter" id="bp-pivot-value-filter" data-pivot-segment hidden>
+       <details>
+        <summary id="bp-pivot-value-summary">Выберите значения</summary>
+        <label>Поиск значений<input id="bp-pivot-value-search" type="search" placeholder="Начните вводить значение"></label>
+        <div class="bp-pivot-filter-actions">
+         <button class="bp-button" id="bp-pivot-select-all" type="button">Выбрать всё</button>
+         <button class="bp-button" id="bp-pivot-clear-values" type="button">Снять выбор</button>
+        </div>
+        <div class="bp-pivot-value-options" id="bp-pivot-value-options" role="group" aria-label="Значения выбранного разреза"></div>
+       </details>
+      </div>
+      <button class="bp-button bp-primary cursor-interaction" type="submit">Применить</button>
+      <button class="bp-button cursor-interaction" id="bp-pivot-reset" type="button">Сбросить фильтры</button>
+     </form>
+     <p class="bp-pivot-legend" id="bp-pivot-legend" hidden></p>
+     <div class="bp-table-wrap" id="bp-pivot-grid" tabindex="0" role="region" aria-label="Таблица количества заявок"></div>
+     <div class="bp-table-footer" id="bp-pivot-page" role="status"></div>
+     <div class="bp-panel-body" id="bp-pivot-apps" hidden></div>
+     <div class="bp-panel-body" id="bp-pivot-fields" hidden></div>
+    </section>
+   <section id="bp-library" class="bp-panel" hidden><div class="bp-panel-head"><h2 id="bp-library-title"></h2></div><div class="bp-panel-body" id="bp-library-content"></div></section>
+   <footer class="bp-foot"><span>BalancePlatform · сравнение ответов СПР</span></footer>
+  </main>
+ </div>
+</div>
+</body>
+</html>
